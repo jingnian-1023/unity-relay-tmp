@@ -46,10 +46,14 @@ jobs:
       - name: 发布到 Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
+          echo "目标仓库: $GH_REPO"
           gh release create unity-6000.3.25f1 \
+            --repo "$GH_REPO" \
             --title "Unity 6000.3.25f1 Windows64" \
             --notes "美国节点中转载。完整文件 MD5: f9ece8be816f34bd301de62dff1d4111。合并: cat unity_part_* > UnitySetup64-6000.3.25f1.exe" \
             unity_part_* parts.md5
           echo "Release 创建完成"
+          gh release view unity-6000.3.25f1 --repo "$GH_REPO"
