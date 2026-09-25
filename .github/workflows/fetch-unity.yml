@@ -1,0 +1,55 @@
+name: Fetch Unity Installer
+
+# 触发：仓库页面点 "Run workflow"，或本文件提交时自动运行
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+
+permissions:
+  contents: write
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    steps:
+      - name: 下载 Unity 6000.3.25f1 (Windows64) 官方安装包
+        run: |
+          set -euo pipefail
+          URL="https://download.unity3d.com/download_unity/e1dba0a9aba4/Windows64EditorInstaller/UnitySetup64-6000.3.25f1.exe"
+          echo "下载地址: $URL"
+          curl -fL --retry 5 --retry-delay 10 --retry-all-errors -o unity_setup.exe "$URL"
+          SIZE=$(stat -c '%s' unity_setup.exe)
+          echo "实际大小: $SIZE"
+          echo "期望大小: 4201959888"
+          ACTUAL=$(md5sum unity_setup.exe | awk '{print $1}')
+          echo "实际 MD5: $ACTUAL"
+          echo "期望 MD5: f9ece8be816f34bd301de62dff1d4111"
+          if [ "$ACTUAL" != "f9ece8be816f34bd301de62dff1d4111" ]; then
+            echo "::error::MD5 校验失败，文件不完整"
+            exit 1
+          fi
+          echo "MD5 校验通过"
+
+      - name: 切分为 1500MiB 分卷
+        run: |
+          set -euo pipefail
+          split -b 1500m -d -a 2 unity_setup.exe unity_part_
+          rm -f unity_setup.exe
+          ls -lh unity_part_*
+          echo "完整文件 MD5: f9ece8be816f34bd301de62dff1d4111" > parts.md5
+          md5sum unity_part_* >> parts.md5
+          cat parts.md5
+
+      - name: 发布到 Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh release create unity-6000.3.25f1 \
+            --title "Unity 6000.3.25f1 Windows64" \
+            --notes "美国节点中转载。完整文件 MD5: f9ece8be816f34bd301de62dff1d4111。合并: cat unity_part_* > UnitySetup64-6000.3.25f1.exe" \
+            unity_part_* parts.md5
+          echo "Release 创建完成"
